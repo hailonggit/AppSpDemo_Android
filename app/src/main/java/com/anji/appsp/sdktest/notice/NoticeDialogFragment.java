@@ -3,14 +3,12 @@ package com.anji.appsp.sdktest.notice;
 import android.content.DialogInterface;
 import android.graphics.drawable.GradientDrawable;
 import android.os.Bundle;
-import android.view.Gravity;
 import android.view.KeyEvent;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.Window;
 import android.view.WindowManager;
-import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -18,8 +16,7 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.fragment.app.DialogFragment;
 
-import com.anji.appsp.sdk.model.SpNoticeModelItem;
-import com.anji.appsp.sdk.model.SpNoticeModelItem;
+import com.anji.appsp.sdk.model.AppSpNoticeModelItem;
 import com.anji.appsp.sdktest.AppContext;
 import com.anji.appsp.sdktest.R;
 
@@ -28,7 +25,7 @@ public class NoticeDialogFragment extends DialogFragment implements View.OnClick
     private TextView tvContent;
     private TextView tvOk;
     private View delete;
-    private SpNoticeModelItem updateModel;
+    private AppSpNoticeModelItem updateModel;
 
     @Override
     public void onClick(View v) {
@@ -91,7 +88,7 @@ public class NoticeDialogFragment extends DialogFragment implements View.OnClick
         lp.height = WindowManager.LayoutParams.WRAP_CONTENT;
         window.setAttributes(lp);
 
-        updateModel = (SpNoticeModelItem) getArguments().getSerializable("notice");
+        updateModel = (AppSpNoticeModelItem) getArguments().getSerializable("notice");
         if (updateModel == null) {
             Toast.makeText(AppContext.getInstance(), "没有公告信息", Toast.LENGTH_LONG).show();
             return;

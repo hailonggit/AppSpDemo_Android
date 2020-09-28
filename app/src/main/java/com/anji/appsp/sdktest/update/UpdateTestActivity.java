@@ -15,18 +15,16 @@ import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.content.ContextCompat;
 
 import com.anji.appsp.sdk.AppSpConfig;
-import com.anji.appsp.sdk.AppSpStatusCode;
+import com.anji.appsp.sdk.AppSpLog;
 import com.anji.appsp.sdk.IAppSpVersionUpdateCallback;
-import com.anji.appsp.sdk.SpLog;
-import com.anji.appsp.sdk.model.SpRespUpdateModel;
+import com.anji.appsp.sdk.http.AppSpRespCode;
+import com.anji.appsp.sdk.model.AppSpModel;
+import com.anji.appsp.sdk.model.AppSpVersion;
 import com.anji.appsp.sdktest.R;
-import com.anji.appsp.sdktest.notice.NoticeTestActivity;
-import com.google.gson.Gson;
 
 
 public class UpdateTestActivity extends AppCompatActivity implements View.OnClickListener {
     //appkey在移动服务平台创建项目时生成
-    private static final String appKey = "b9abfa24ee644e1d8baa39cef165261d";
     private final int REQUEST_CODE_ASK_PERMISSIONS = 11;
     private boolean permissionAllowed = true;
 
@@ -84,7 +82,6 @@ public class UpdateTestActivity extends AppCompatActivity implements View.OnClic
             return;
         }
         UpdateType updateType = UpdateType.Normal;
-
         switch (v.getId()) {
             case R.id.version_btn:
                 updateType = UpdateType.Normal;
@@ -108,29 +105,19 @@ public class UpdateTestActivity extends AppCompatActivity implements View.OnClic
         checkVersion(updateType);
     }
 
-    private void checkVersion(final UpdateType updateType) {
-        AppSpConfig.getInstance().init(this, appKey);
-        AppSpConfig.getInstance().setVersionUpdateCallback(new IAppSpVersionUpdateCallback() {
+    private void versionUISuccess(final UpdateType updateType, final AppSpModel<AppSpVersion> spModel) {
+        runOnUiThread(new Runnable() {
             @Override
-            public void update(SpRespUpdateModel updateModel) {
-                //因为是异步，注意当前窗口是否活跃
-                if (!isActive()) {
+            public void run() {
+                AppSpVersion updateModel = spModel.getRepData();
+                //注意判空
+                if (updateModel == null) {
+                    Toast.makeText(UpdateTestActivity.this, "当前为最新版本", Toast.LENGTH_LONG).show();
                     return;
                 }
-                SpLog.d("Test updateModel is " + updateModel);
                 String errorMsg = null;
-                switch (updateModel.getStatusCode()) {
-                    case AppSpStatusCode.StatusCode_Success:
-                        break;
-                    case AppSpStatusCode.StatusCode_Cancel:
-                        errorMsg = "用户已取消json文件下载";
-                        break;
-                    case AppSpStatusCode.StatusCode_Timeout:
-                        errorMsg = "服务器json文件地址连接超时";
-                        break;
-                    case AppSpStatusCode.StatusCode_UrlFormatError:
-                        errorMsg = "请求地址格式错误";
-                        break;
+                if (!AppSpRespCode.SUCCESS.equals(spModel.getRepCode())) {
+                    errorMsg = spModel.getRepMsg();
                 }
 
                 if (errorMsg != null) {
@@ -139,12 +126,43 @@ public class UpdateTestActivity extends AppCompatActivity implements View.OnClic
                     //版本更新
                     handleUpdate(updateModel, updateType);
                 }
+            }
+        });
 
+    }
+
+    private void versionUIError(String code, final String msg) {
+        runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                if (msg != null) {
+                    Toast.makeText(UpdateTestActivity.this, msg, Toast.LENGTH_LONG).show();
+                }
+            }
+        });
+
+    }
+
+    private void checkVersion(final UpdateType updateType) {
+        AppSpConfig.getInstance().setVersionUpdateCallback(new IAppSpVersionUpdateCallback() {
+            @Override
+            public void update(AppSpModel<AppSpVersion> spModel) {
+                //因为是异步，注意当前窗口是否活跃
+                if (!isActive()) {
+                    return;
+                }
+                //当前在子线程，注意
+                versionUISuccess(updateType, spModel);
+            }
+
+            @Override
+            public void error(String code, String msg) {
+                versionUIError(code, msg);
             }
         });
     }
 
-    private void handleUpdate(SpRespUpdateModel updateModel, UpdateType updateType) {
+    private void handleUpdate(AppSpVersion updateModel, UpdateType updateType) {
         if (updateModel == null) {
             return;
         }
@@ -152,26 +170,22 @@ public class UpdateTestActivity extends AppCompatActivity implements View.OnClic
             switch (updateType) {
                 case Normal:
                     //无需改造数据，用服务器返回数据，下面的都是模拟的数据
-                    //ignore
                     break;
                 case Force:
-                    //是外部地址，需要跳转H5
-                    updateModel.setExternalUrl(false);
                     //强制更新
                     updateModel.setMustUpdate(true);
                     break;
                 case NotForce:
-                    updateModel.setExternalUrl(false);
                     updateModel.setMustUpdate(false);
                     break;
                 case ForceH5:
-                    updateModel.setExternalUrl(true);
-                    updateModel.setUrl("https://shouji.baidu.com/software/27007946.html");
+                    //跳转到H5，强制
+                    updateModel.setDownloadUrl("https://shouji.baidu.com/software/27007946.html");
                     updateModel.setMustUpdate(true);
                     break;
                 case NotForceH5:
-                    updateModel.setExternalUrl(true);
-                    updateModel.setUrl("https://shouji.baidu.com/software/27007946.html");
+                    //跳转到H5，非强制
+                    updateModel.setDownloadUrl("https://shouji.baidu.com/software/27007946.html");
                     updateModel.setMustUpdate(false);
                     break;
                 default:
@@ -185,7 +199,7 @@ public class UpdateTestActivity extends AppCompatActivity implements View.OnClic
         showUpdateDialog(updateModel);
     }
 
-    private void showUpdateDialog(SpRespUpdateModel updateModel) {
+    private void showUpdateDialog(AppSpVersion updateModel) {
         Bundle bundler = new Bundle();
         bundler.putSerializable("update", updateModel);
         UpdateDialogFragment updateDialogFragment = new UpdateDialogFragment();

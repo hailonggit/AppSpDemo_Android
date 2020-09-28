@@ -2,13 +2,13 @@ package com.anji.appsp.sdktest;
 
 import android.content.Intent;
 import android.os.Bundle;
-import android.provider.Settings;
 import android.view.View;
 
 import androidx.appcompat.app.AppCompatActivity;
 
 import com.anji.appsp.sdktest.notice.NoticeTestActivity;
 import com.anji.appsp.sdktest.update.UpdateTestActivity;
+
 
 public class MainActivity extends AppCompatActivity implements View.OnClickListener {
 
@@ -30,6 +30,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
             case R.id.notice:
                 intent = new Intent(this, NoticeTestActivity.class);
                 startActivity(intent);
+
                 break;
             default:
                 break;

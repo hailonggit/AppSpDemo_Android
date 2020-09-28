@@ -7,7 +7,6 @@ import android.view.LayoutInflater;
 import android.view.MenuItem;
 import android.view.View;
 import android.view.ViewGroup;
-import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.appcompat.app.ActionBar;
@@ -15,13 +14,13 @@ import androidx.appcompat.app.AppCompatActivity;
 
 import com.anji.appsp.sdk.AppSpConfig;
 import com.anji.appsp.sdk.IAppSpNoticeCallback;
-import com.anji.appsp.sdk.AppSpStatusCode;
-import com.anji.appsp.sdk.model.SpNoticeModelItem;
-import com.anji.appsp.sdk.model.SpRespNoticeModel;
+import com.anji.appsp.sdk.http.AppSpRespCode;
+import com.anji.appsp.sdk.model.AppSpModel;
+import com.anji.appsp.sdk.model.AppSpNoticeModelItem;
 import com.anji.appsp.sdktest.R;
+import com.anji.appsp.sdktest.update.UpdateTestActivity;
 
 import java.util.List;
-import java.util.Random;
 import java.util.concurrent.ThreadLocalRandom;
 
 import static com.anji.appsp.sdktest.notice.NoticeEnum.Normal;
@@ -29,7 +28,6 @@ import static com.anji.appsp.sdktest.notice.NoticeEnum.Normal;
 
 public class NoticeTestActivity extends AppCompatActivity implements View.OnClickListener {
     //appkey在移动服务平台创建项目时生成
-    private static final String appKey = "b9abfa24ee644e1d8baa39cef165261d";
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -78,57 +76,83 @@ public class NoticeTestActivity extends AppCompatActivity implements View.OnClic
         checkNotice(noticeType);
     }
 
-    private void checkNotice(final NoticeEnum noticeType) {
-        AppSpConfig.getInstance().init(this, appKey);
-        AppSpConfig.getInstance().setNoticeCallback(new IAppSpNoticeCallback() {
+    private void noticeUISuccess(final NoticeEnum noticeType, final AppSpModel<List<AppSpNoticeModelItem>> spModel) {
+        runOnUiThread(new Runnable() {
             @Override
-            public void notice(SpRespNoticeModel notice) {
-                //因为是异步，注意当前窗口是否活跃
-                if (!isActive()) {
+            public void run() {
+                List<AppSpNoticeModelItem> list = spModel.getRepData();
+                //注意判空
+                if (list == null) {
+                    Toast.makeText(NoticeTestActivity.this, "当前无公告", Toast.LENGTH_LONG).show();
                     return;
                 }
                 String errorMsg = null;
-                switch (notice.getStatusCode()) {
-                    case AppSpStatusCode.StatusCode_Success:
-                        break;
-                    case AppSpStatusCode.StatusCode_Cancel:
-                        errorMsg = "用户已取消json文件下载";
-                        break;
-                    case AppSpStatusCode.StatusCode_Timeout:
-                        errorMsg = "服务器json文件地址连接超时";
-                        break;
-                    case AppSpStatusCode.StatusCode_UrlFormatError:
-                        errorMsg = "请求地址格式错误";
-                        break;
+                if (!AppSpRespCode.SUCCESS.equals(spModel.getRepCode())) {
+                    errorMsg = spModel.getRepMsg();
                 }
                 if (errorMsg != null) {
                     Toast.makeText(NoticeTestActivity.this, errorMsg, Toast.LENGTH_LONG).show();
                 } else {
                     //弹出公告
-                    handleNotices(notice.getModelItemList(), noticeType);
+                    if (list != null) {
+                        if (list.size() == 0) {
+                            Toast.makeText(NoticeTestActivity.this, "公告为空", Toast.LENGTH_LONG).show();
+                            return;
+                        }
+                        handleNotices(list, noticeType);
+                    }
                 }
+            }
+        });
+    }
+
+    private void noticeUIError(final String code, final String msg) {
+        runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                if (msg != null) {
+                    Toast.makeText(NoticeTestActivity.this, msg, Toast.LENGTH_LONG).show();
+                }
+            }
+        });
+    }
+
+    private void checkNotice(final NoticeEnum noticeType) {
+        AppSpConfig.getInstance().setNoticeCallback(new IAppSpNoticeCallback() {
+            @Override
+            public void notice(AppSpModel<List<AppSpNoticeModelItem>> spModel) {
+                //因为是异步，注意当前窗口是否活跃
+                if (!isActive()) {
+                    return;
+                }
+                //当前在子线程，注意
+                noticeUISuccess(noticeType, spModel);
+            }
+
+            @Override
+            public void error(String code, String msg) {
+                noticeUIError(code, msg);
             }
         });
 
     }
 
-    private void handleNotices(List<SpNoticeModelItem> notices, NoticeEnum noticeType) {
+    private void handleNotices(List<AppSpNoticeModelItem> notices, NoticeEnum noticeType) {
         //其中"dialog"和"scroll"是产品和开发约定好的type，根据type决定显示的风格,这两个type是我们约定的
-        //ignore
         showNotices(notices, noticeType);
     }
 
 
-    private void showNotices(List<SpNoticeModelItem> modelItems, NoticeEnum noticeType) {
+    private void showNotices(List<AppSpNoticeModelItem> modelItems, NoticeEnum noticeType) {
         switch (noticeType) {
             case Normal:
                 //ignore
-                for (SpNoticeModelItem modelItem : modelItems) {
+                for (AppSpNoticeModelItem modelItem : modelItems) {
                     displayNotice(modelItem);
                 }
                 break;
             case Dialog://如果显示样式是dialog
-                for (SpNoticeModelItem modelItem : modelItems) {
+                for (AppSpNoticeModelItem modelItem : modelItems) {
                     modelItem.setTemplateType(NoticeType.Dialog);
                     displayNotice(modelItem);
                 }
@@ -136,7 +160,7 @@ public class NoticeTestActivity extends AppCompatActivity implements View.OnClic
             case Scroll://如果显示样式是跑马灯
                 ViewGroup parent = findViewById(R.id.scroll_container);
                 parent.removeAllViews();
-                for (SpNoticeModelItem modelItem : modelItems) {
+                for (AppSpNoticeModelItem modelItem : modelItems) {
                     modelItem.setTemplateType(NoticeType.Scroll);
                     displayNotice(modelItem);
                 }
@@ -147,7 +171,7 @@ public class NoticeTestActivity extends AppCompatActivity implements View.OnClic
 
     }
 
-    private void displayNotice(SpNoticeModelItem modelItem) {
+    private void displayNotice(AppSpNoticeModelItem modelItem) {
         if (NoticeType.Dialog.equals(modelItem.templateType)) {
             Bundle bundler = new Bundle();
             bundler.putSerializable("notice", modelItem);

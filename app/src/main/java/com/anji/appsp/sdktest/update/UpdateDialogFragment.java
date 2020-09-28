@@ -7,14 +7,11 @@ import android.content.Intent;
 import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
-import android.graphics.drawable.Drawable;
-import android.graphics.drawable.GradientDrawable;
 import android.net.Uri;
 import android.os.AsyncTask;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
-import android.util.Log;
 import android.view.KeyEvent;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -26,11 +23,10 @@ import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
-import androidx.core.content.ContextCompat;
 import androidx.core.content.FileProvider;
 import androidx.fragment.app.DialogFragment;
 
-import com.anji.appsp.sdk.model.SpRespUpdateModel;
+import com.anji.appsp.sdk.model.AppSpVersion;
 import com.anji.appsp.sdktest.AppContext;
 import com.anji.appsp.sdktest.BuildConfig;
 import com.anji.appsp.sdktest.R;
@@ -52,20 +48,23 @@ import static com.anji.appsp.sdktest.DeviceUtil.getScreenWidth;
 
 public class UpdateDialogFragment extends DialogFragment implements View.OnClickListener {
     private TextView tvContent;
-    private TextView tvProgress;
     private TextView tvOk;
-    private TextView tvCancle;
-    private LinearLayout llContainer;
+    private View close;
     private ProgressBar progress;
 
-    private SpRespUpdateModel updateModel;
+    private AppSpVersion updateModel;
     private File file;
-    private DecimalFormat decimalFormat = new DecimalFormat("##.0");
     private String fileName;
     private boolean isInteriorSdCardPrivate;
     private boolean isShowPer;
     private ApkDownloadTask apkDownloadTask;
     private int updateCount = 0;//当前进度
+
+    @Override
+    public void onCreate(@Nullable Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setStyle(STYLE_NO_FRAME, R.style.dialog);
+    }
 
     @Override
     public void onDismiss(@NonNull DialogInterface dialog) {
@@ -78,7 +77,7 @@ public class UpdateDialogFragment extends DialogFragment implements View.OnClick
     @Nullable
     @Override
     public View onCreateView(LayoutInflater inflater, @Nullable ViewGroup container, @Nullable Bundle savedInstanceState) {
-        View view = inflater.inflate(R.layout.layout_dialog_update, null);
+        View view = inflater.inflate(R.layout.layout_dailog_update, null);
         if (getDialog() == null) {
             return view;
         }
@@ -88,6 +87,12 @@ public class UpdateDialogFragment extends DialogFragment implements View.OnClick
             public boolean onKey(DialogInterface dialog, int keyCode, KeyEvent event) {
                 if (keyCode == KeyEvent.KEYCODE_BACK) {
                     if (event.getAction() == KeyEvent.ACTION_UP) {
+                        if (updateModel != null) {
+                            if (updateModel.isMustUpdate()) {
+                                close.performClick();
+                                return true;
+                            }
+                        }
                         dismiss();
                     }
                 }
@@ -116,65 +121,64 @@ public class UpdateDialogFragment extends DialogFragment implements View.OnClick
                 file.delete();
             }
         }
-        tvOk.setTag(String.valueOf(updateModel.getUrl()));
+        tvOk.setTag(String.valueOf(updateModel.getDownloadUrl()));
     }
 
     private void initView(View view) {
-        tvProgress = view.findViewById(R.id.tvProgress);
+//        tvProgress = view.findViewById(R.id.tvProgress);
         tvContent = view.findViewById(R.id.tv_content);
         tvOk = view.findViewById(R.id.tv_ok);
-        tvCancle = view.findViewById(R.id.tv_cancle);
-        llContainer = view.findViewById(R.id.ll_container);
+        close = view.findViewById(R.id.close);
         progress = view.findViewById(R.id.progress);
 
         tvOk.setOnClickListener(this);
-        tvCancle.setOnClickListener(this);
+        close.setOnClickListener(this);
 
-        GradientDrawable backgroundDrawable = new GradientDrawable();
-        backgroundDrawable.setColor(0xFFFFFFFF);
-        float scale = getResources().getDisplayMetrics().density;
-        backgroundDrawable.setCornerRadius((int) (4 * scale + 0.5f));
-        updateModel = (SpRespUpdateModel) getArguments().getSerializable("update");
+        updateModel = (AppSpVersion) getArguments().getSerializable("update");
         if (updateModel == null) {
             Toast.makeText(AppContext.getInstance(), "没有更新信息", Toast.LENGTH_LONG).show();
             return;
         }
-        tvOk.setTag(updateModel.getUrl());
+        tvOk.setTag(updateModel.getDownloadUrl());
         String releaseLog = updateModel.getUpdateLog();
         setCancelable(false);
         tvContent.setText(releaseLog);
         if (updateModel.isMustUpdate()) {
-            tvCancle.setText("退出");
+            close.setVisibility(View.GONE);
         } else {
-            tvCancle.setText("取消");
+            close.setVisibility(View.VISIBLE);
         }
-
     }
 
     @Override
     public void onClick(View view) {
         switch (view.getId()) {
-            case R.id.tv_cancle:
+            case R.id.close:
                 if (updateModel != null) {
                     if (updateModel.isMustUpdate()) {
+                        Toast.makeText(getContext(), "当前版本必须强制更新，应用即将退出", Toast.LENGTH_LONG).show();
                         view.postDelayed(new Runnable() {
                             @Override
                             public void run() {
                                 System.exit(0);
                             }
-                        }, 800);
+                        }, 3000);
                     } else {
                         dismiss();
                     }
                 }
                 break;
             case R.id.tv_ok:
+                boolean externalUrl = false;
+                if (updateModel != null && updateModel.getDownloadUrl() != null) {
+                    externalUrl = !updateModel.getDownloadUrl().contains(".apk");
+                }
                 //强制更新，必须下载，否则退出APP
                 if (updateModel != null) {
                     if (updateModel.isMustUpdate()) {
-                        if (updateModel.isExternalUrl()) {
+                        if (externalUrl) {
                             //跳转到外部H5下载
-                            launchH5(updateModel.getUrl());
+                            launchH5(updateModel.getDownloadUrl());
                         } else {
                             //内部下载地址
                             //安裝
@@ -182,9 +186,9 @@ public class UpdateDialogFragment extends DialogFragment implements View.OnClick
                             loadApk(view.getTag().toString());
                         }
                     } else {
-                        if (updateModel.isExternalUrl()) {
+                        if (externalUrl) {
                             //跳转到外部H5下载
-                            launchH5(updateModel.getUrl());
+                            launchH5(updateModel.getDownloadUrl());
                         } else {
                             //内部下载地址
                             //安裝
@@ -327,7 +331,7 @@ public class UpdateDialogFragment extends DialogFragment implements View.OnClick
         @Override
         protected void onProgressUpdate(Float... values) {
             progress.setProgress(values[0].intValue());
-            tvProgress.setText(decimalFormat.format(values[0] * 100) + "%");
+//            tvProgress.setText(decimalFormat.format(values[0] * 100) + "%");
             updateCount = (int) (values[0] * 100);
             progress.setProgress(updateCount);
 

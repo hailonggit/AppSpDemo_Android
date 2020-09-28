@@ -5,5 +5,5 @@ package com.anji.appsp.sdktest.notice;
  */
 public class NoticeType {
     public static final String Dialog = "dialog";
-    public static final String Scroll = "scroll";
+    public static final String Scroll = "horizontal_scroll";
 }
